@@ -1,4 +1,58 @@
 import requests
+import json
+from django.conf import settings
+
+def create_axl_request(email, ticket_name, phone, status, utm, price):
+    payload = {
+        "scenarioId": f"{settings.ACCEL_API_SCENARIO_ID}",
+        "contactData": {
+            "email": email,
+        },
+        "data": {
+            "luma_ticket_name": ticket_name,
+            "phone": phone,
+            "luma_status": status,
+            "luma_utm": utm,
+            "luma_ticket_price": price
+        }
+    }
+    
+    return payload
+
+def update_axl_contact(email, ticket_name, phone, status, utm, price):
+    API_URL = "https://admin.accelonline.io"
+    HEADERS = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {settings.ACCEL_API_KEY}'
+    }
+    
+    try:
+        payload = create_axl_request(
+            email=email,
+            ticket_name=ticket_name,
+            phone=phone,
+            status=status,
+            utm=utm,
+            price=price
+        )
+        
+        response = requests.post(
+            f"{API_URL}/api/v1/scenario/run",
+            data=json.dumps(payload),
+            headers=HEADERS
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        if result:
+            print(f"Контакт успешно обновлен: {email}")
+        return result
+        
+    except Exception as e:
+        print(f"Ошибка при обновлении контакта {email}: {str(e)}")
+        return None
+
 
 class AccelOnlineAPI:
     def __init__(self, base_url="https://api.accelonline.io"):

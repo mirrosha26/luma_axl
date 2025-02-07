@@ -81,6 +81,9 @@ class EventClient(models.Model):
     name = models.CharField('ФИО', max_length=255)
     email = models.EmailField('Email')
     axl_id = models.CharField('ID в AXL', max_length=255, blank=True, null=True)
+    phone = models.CharField('Телефон', max_length=255, blank=True, null=True)
+    utm = models.CharField('UTM', max_length=255, blank=True, null=True)
+    price = models.DecimalField('Цена', max_digits=10, decimal_places=2, blank=True, null=True)
     
     # Поля события
     approval_status = models.CharField('Статус', max_length=20, choices=APPROVAL_STATUS_CHOICES)

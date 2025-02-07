@@ -5,6 +5,7 @@ from events.luma_api import LumaAPI
 from events.models import Event, EventClient
 from events.accel_api import AccelOnlineAPI
 import time
+from events.accel_api import update_axl_contact
 
 
 class Command(BaseCommand):
@@ -66,18 +67,23 @@ class Command(BaseCommand):
         if not event_client:
             self._create_guest(event, guest, accel_connect)
         else:
-            self._update_guest_status(event_client, status, accel_connect)
+            self._update_guest_status(event_client, status, guest, accel_connect)
 
     def _create_guest(self, event, guest, accel_connect):
         """Создание нового гостя"""
+        ticket_price = guest.get('event_ticket', {}).get('amount', 0) / 100 if guest.get('event_ticket') else 0
+        
         event_client = EventClient.objects.create(
             event=event,
             email=guest.get('email'),
-            name=guest.get('name', 'Н/Д'),
+            name=guest.get('name', ''),
             approval_status=guest.get('approval_status', 'pending'),
             registered_at=parse_datetime(guest.get('registered_at')) if guest.get('registered_at') else None,
             check_in_qr_code=guest.get('check_in_qr_code'),
-            ticket_name=guest.get('event_ticket', {}).get('name', 'Н/Д') if guest.get('event_ticket') else None,
+            ticket_name=guest.get('event_ticket', {}).get('name', '') if guest.get('event_ticket') else None,
+            phone=guest.get('phone_number'),
+            utm=guest.get('custom_source'),
+            price=ticket_price
         )
         
         self._create_axl_user(event, event_client, accel_connect)
@@ -85,11 +91,21 @@ class Command(BaseCommand):
         self.stdout.write(f"Создана запись: {event_client.name}")
         self.stdout.write('-' * 50)
 
-    def _update_guest_status(self, event_client, new_status, accel_connect):
+    def _update_guest_status(self, event_client, new_status, guest, accel_connect):
         """Обновление статуса существующего гостя"""
         if event_client.approval_status != new_status:
             old_status = event_client.approval_status
             event_client.approval_status = new_status
+            
+            # Обновляем дополнительные поля
+            if guest.get('phone_number'):
+                event_client.phone = guest.get('phone_number')
+            if guest.get('custom_source'):
+                event_client.utm = guest.get('custom_source')
+            if guest.get('event_ticket'):
+                event_client.ticket_name = guest.get('event_ticket', {}).get('name')
+                event_client.price = guest.get('event_ticket', {}).get('amount', 0) / 100
+            
             event_client.save()
             
             # Если есть AXL ID, удаляем пользователя из старого вебинара
@@ -133,3 +149,15 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Создан пользователь в Accel Online: {event_client.email}"))
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Ошибка при создании пользователя в Accel Online: {str(e)}"))
+
+        try:
+            update_axl_contact(
+                email=event_client.email,
+                ticket_name=event_client.ticket_name or "",
+                phone=event_client.phone or "",
+                status=event_client.approval_status,
+                utm=event_client.utm or "",
+                price=event_client.price or ""
+            )
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"Ошибка при обновлении контакта в AXL: {str(e)}"))
